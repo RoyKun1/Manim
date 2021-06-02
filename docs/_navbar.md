@@ -1,0 +1,6 @@
+- [官方手册](https://docs.manim.community/en/latest/tutorials.html)
+  - [Tutorials](https://docs.manim.community/en/latest/tutorials.html)
+  - [Manual](https://docs.manim.community/en/latest/reference.html)
+- [中文社区]()
+  - [快速使用]()
+  - [详细补充]()
