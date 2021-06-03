@@ -79,7 +79,7 @@
                 self.add(plots)
     ```
 
-    ![image-20210602172036952](./imgs/angle2.png)
+    ​	![image-20210602172036952](./imgs/angle2.png)
 
 > 查看源码，了解一些常用方法
 
@@ -137,10 +137,10 @@
     ```
 
     - 这里涉及到**贝塞尔曲线**的知识，因为控制简便却具有极强的描述能力，bezier curve在工业设计领域应用广泛，可以查资料学习
-    - 从代码层面来看，`np.linspace()`在这里得到包含4个点的等差数列，然后使用自定义的`interpolate`插值模块
+    - 从代码层面来看，`np.linspace()`在这里得到(0,1)之间包含4个点的等差数列，然后使用自定义的`interpolate`插值模块，得到4批由贝塞尔方程得到的数据（例如每批数据的shape为（64，3）的nparray）
     - 最后调用了`set_anchors_and_handles()`得到生成的角，`anchors`和`handles`是理解的关键
         - 通过PS中的钢笔工具可以理解，anchor是设置的锚点，handle是控制曲线的柄，操作”柄“，即可生成由锚点决定的贝塞尔曲线，拟合出我们想要的图形！
-        - 从上面的代码可以看出是用了两组`anchor/handle`，代入后方程拟合得到的锚点很多，添加为`points`属性
+        - 上面的代码就是将4批锚点和控制柄的数据传入，这些点作为points属性添加到VMobject对象，形成图形！
     - 类似的，有`set_points_smoothly()`方法
 
 - `SurroundingRectangle`类：将对象用矩形包裹住
@@ -185,15 +185,16 @@
             a1 = Angle(l1, l2, other_angle=True, radius=norm - 0.5).set_color(GREEN)
             a2 = Angle(l1, l2, other_angle=True, radius=norm).set_color(GREEN)
             q1 = a1.get_points()
-            q2 = a2.reverse_direction().get_points() 
+            q2 = a2.reverse_direction().get_points() # 否则会生成交叉的图形
             pnts = np.concatenate([q1, q2, q1[0].reshape(1, 3)])
             mfill = VMobject().set_color(ORANGE)
             mfill.set_points_as_corners(pnts).set_fill(GREEN, opacity=1)
             self.add(l1, l2)
             self.add(mfill)
+    # 重点解释一下用到的函数
     ```
 
-- `set_color()`：设置对象的边线和填充颜色
+- `set_color()`：设置对象的边线颜色
 
     ```python
     def set_color(self, color, family=True):
@@ -247,7 +248,7 @@
     ```
 
     - 可以**追踪**到`VMobject`，有对应的`set_points()`方法，通过PyCharm的Find Usages功能可以发现，用在了`CubicBezier`类和`Line`类中
-    - 但是，这里的`points`属性是在`Arc`的`generate_points()`方法中得到的，其中调用了一个关键方法`set_pre_positioned_points()`，最后还是到了`set_anchors_and_handles()`方法
+    - 但是，这里的`points`属性是在`Arc`的`generate_points()`方法中得到的（弧是用Arc得到的），其中调用了一个关键方法`set_pre_positioned_points()`，最后还是到了`set_anchors_and_handles()`方法
 
     ```python
     def generate_points(self):
@@ -257,5 +258,54 @@
             Arc.generate_points(self)
     ```
 
-    - 注：这些点是由顺序的，所以示例代码中有`reverse_direction()`方法
+    - 注：这些点是有顺序的，所以示例代码中有`reverse_direction()`方法，按路径描绘图形
+
+    ```python
+    # 我们在示例代码后加几行代码就比较清楚了
+    dot1 = Dot(q1[0], radius=0.05, color=RED)
+    dot2 = Dot(q1[10], radius=0.05, color=RED)
+    dot3 = Dot(q1[20], radius=0.05, color=RED)
+    dot4 = Dot(q1[31], radius=0.05, color=RED)	# shape (32, 3)	[1.26065519 1.19359981 0.        ]
+    self.add(dot1, dot2, dot3, dot4)	
+    
+    dot5 = Dot(q2[0], radius=0.05, color=BLUE)	# [1.62373291 1.5373651  0.        ]
+    dot6 = Dot(q2[10], radius=0.05, color=BLUE)
+    # dot7 = Dot(q2[20], radius=0.05, color=RED)
+    # dot8 = Dot(q2[31], radius=0.05, color=RED)
+    self.add(dot5, dot6)
+    ```
+
+    <img src="./imgs/angle4.png" alt="image-20210603152617621" style="zoom:50%;" />
+
+    - 如图，贝塞尔曲线上的点传入的顺序如箭头所示，`q1[31]`和`q2[0]`的tan值都是0.9468，因此连成了直线
+
+- `np.concatenate()`：数组拼接
+
+    ```python
+    a=np.array([[1,2,3],[4,5,6]])
+    b=np.array([[11,21,31],[7,8,9]])
+    # x轴拼接
+    np.concatenate((a,b),axis=0)
+    array([[ 1,  2,  3],
+           [ 4,  5,  6],
+           [11, 21, 31],
+           [ 7,  8,  9]])
+    # y轴拼接，即将对应行拼接
+    np.concatenate((a,b),axis=1)
+    array([[ 1,  2,  3, 11, 21, 31],
+           [ 4,  5,  6,  7,  8,  9]])
+    ```
+
+    - `numpy`在数据科学领域用的很广泛
+
+- 这里get到的points就是贝塞尔曲线的关键点，因此传入set函数后可以生成与之前图形重合的封闭部分；这种一种操作图形的思路
+
+- 类似的用法在Angle源码中也能看到：
+
+    ```python
+    # 传入的anchor_middle是直角符号拐点的坐标，因为是计算得到，tan角度一致，所以能得到直角
+    self.set_points_as_corners([anchor_angle_1, anchor_middle, anchor_angle_2])
+    ```
+
+    
 
