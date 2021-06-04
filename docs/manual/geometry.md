@@ -170,7 +170,7 @@
 
 - 效果如图：
 
-    <img src="./imgs/angle3.png"/>
+    ![](./imgs/angle3.png)
 
     ```python
     # 示例代码
@@ -280,7 +280,7 @@
     self.add(dot5, dot6)
     ```
 
-    <img src="./imgs/angle4.png"/>
+    ![](/Users/mac/manim_master/docs/manual/imgs/angle4.png)
 
     - 如图，贝塞尔曲线上的点传入的顺序如箭头所示，`q1[31]`和`q2[0]`的tan值都是0.9468，因此连成了直线
 
