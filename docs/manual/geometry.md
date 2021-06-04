@@ -144,6 +144,7 @@
         - 通过PS中的钢笔工具可以理解，anchor是设置的锚点，handle是控制曲线的柄，操作”柄“，即可生成由锚点决定的贝塞尔曲线，拟合出我们想要的图形！
         - 上面的代码就是将4批锚点和控制柄的数据传入，这些点作为points属性添加到VMobject对象，形成图形！
     - 类似的，有`set_points_smoothly()`方法
+    - 看到这，可以发现这个方法其实是非常通用的，或者说这里的"角"是一个指代，最终生成的形状取决于传入的anchors和handles
 
 - `SurroundingRectangle`类：将对象用矩形包裹住
 
@@ -168,7 +169,7 @@
 
 - 效果如图：
 
-    <img src="./imgs/angle3.png" alt="image-20210602201356584" style="zoom:50%;" />
+    <img src="./imgs/angle3.png" />
 
     ```python
     # 示例代码
@@ -278,7 +279,7 @@
     self.add(dot5, dot6)
     ```
 
-    <img src="./imgs/angle4.png" alt="image-20210603152617621" style="zoom:50%;" />
+    <img src="./imgs/angle4.png" />
 
     - 如图，贝塞尔曲线上的点传入的顺序如箭头所示，`q1[31]`和`q2[0]`的tan值都是0.9468，因此连成了直线
 
