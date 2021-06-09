@@ -316,5 +316,224 @@
 
 ## Arc
 
+- 在安装manim的过程中可以发现它使用了`cairo`库，这是一个开源的2d矢量图形库，支持多种后端输出，用c语言编写而且模块化设计得很出色（又快又好），已经被Linux操作系统集成用于图形桌面中
+- cairo能够做各种复杂的点线图案绘制、填充、文字渲染、图像变换、剪切、层混合等等操作；manim中主要在哪使用这个库呢？可以查看`Camera`类，主要使用cario描绘贝塞尔曲线
+- 弧线（arc）又是很多图形绘制的基础，这里就通过源码深入探究弧线的绘制，揭开manim神秘的面纱
+- manim的特点是封装了视频动画制作的方法，这一点在`update`类中很好的体现，然动画制作更加灵活，本质上还是组合图像帧
+
+> Arc源码
+
+- 初始化参数
+
+  ```python
+  def __init__(
+      self,
+      radius: float = 1.0,	# 圆弧半径
+      start_angle=0,	# 起始角度
+      angle=TAU / 4,	# 圆弧角度（整个角），TAU: float = 2 * PI
+      num_components=9,	# 线段数量，再议
+      anchors_span_full_range=True,	# 再议
+      arc_center=ORIGIN,	# 圆点位置
+      **kwargs	# 其他参数，例如stroke_width
+  ):
+  ```
+
+  - 看一组代码体会一下：
+
+  ```python
+  def construct(self):
+      # 默认参数：半径为1的90度的弧
+      arc1 = Arc()
+      # 传参
+      arc2 = Arc(radius=2, start_angle=-90*DEGREES, angle=90*DEGREES, num_components=3, stroke_width=4, stroke_color=WHITE)
+      arc3 = Arc(radius=3, start_angle=TAU/(-4), angle=TAU/2, num_components=9, stroke_width=4, stroke_color=WHITE)
+      arc4 = Arc(radius=3, start_angle=TAU/4, angle=TAU/2, num_components=9, stroke_width=4, stroke_color=RED)
+      self.add(arc1, arc2, arc3, arc4)
+  ```
+
+  ![image-20210608133308716](/Users/mac/manim_master/docs/manual/imgs/arc1.png)
+
+- 怎么画出来的？继续看`__init__`的代码
+
+  ```python
+  if radius is None:  # apparently None is passed by ArcBetweenPoints
+    	radius = 1.0
+  self.radius = radius
+  self.num_components = num_components
+  self.anchors_span_full_range = anchors_span_full_range
+  self.arc_center = arc_center
+  self.start_angle = start_angle
+  self.angle = angle
+  self._failed_to_get_center = False
+  TipableVMobject.__init__(self, **kwargs)	# 初始化Tipable对象
+  ```
+
+  ```python
+  # 这个先不用管
+  class TipableVMobject(VMobject):
+      def __init__(
+          self,
+          tip_length=DEFAULT_ARROW_TIP_LENGTH,	# 0.35
+          normal_vector=OUT,	# np.array((0.0, 0.0, 1.0))
+          tip_style={},
+          **kwargs
+      ):
+          print(kwargs)	# {'stroke_width': 4, 'stroke_color': '#FFFFFF'}
+          self.tip_length = tip_length
+          self.normal_vector = normal_vector
+          self.tip_style = tip_style
+          VMobject.__init__(self, **kwargs)	# 初始化完VMobject就到set_pre_positioned_points()了
+  ```
+
+  ```python
+  def set_pre_positioned_points(self):
+      anchors = np.array(
+          [
+              np.cos(a) * RIGHT + np.sin(a) * UP
+              for a in np.linspace(
+                  self.start_angle, self.start_angle + self.angle, self.num_components
+              )   # 在给定的角度范围得到等差数列，每个a得到其保存角度的向量，9个点，所以是9个向量
+          ]
+      )
+      # self._scatters(anchors)
+      pdb.set_trace()
+      # 找出哪些控制点将为圆提供适当的切线
+      d_theta = self.angle / (self.num_components - 1.0)  # 0.19634954084936207
+      tangent_vectors = np.zeros(anchors.shape)   # (9,3)
+      # Rotate all 90 degrees, via (x, y) -> (-y, x)
+      tangent_vectors[:, 1] = anchors[:, 0]
+      tangent_vectors[:, 0] = -anchors[:, 1]  # 调换1、2列并取反
+      # Use tangent vectors to deduce anchors
+      handles1 = anchors[:-1] + (d_theta / 3) * tangent_vectors[:-1]  # 应该是一个公式   tangent_vectors[:-1] 除了最后行都取
+      handles2 = anchors[1:] - (d_theta / 3) * tangent_vectors[1:]    # 除了第一行，都取
+      point = [anchors, handles1, handles2]	# 一切都源于anchors
+      self._scatters(point, ['red', 'blue', 'green'])	# 画图
+      self.set_anchors_and_handles(anchors[:-1], handles1, handles2, anchors[1:])
+  ```
+
+  - 先不纠结数学原理，从结果入手
+
+  ```python
+  # VMobject初始化之后直接到：
+  # set_pre_positioned_points() 
+  ## anchors
+  [[1.00000000e+00 0.00000000e+00 0.00000000e+00]
+   [9.80785280e-01 1.95090322e-01 0.00000000e+00]
+   [9.23879533e-01 3.82683432e-01 0.00000000e+00]
+   [8.31469612e-01 5.55570233e-01 0.00000000e+00]
+   [7.07106781e-01 7.07106781e-01 0.00000000e+00]
+   [5.55570233e-01 8.31469612e-01 0.00000000e+00]
+   [3.82683432e-01 9.23879533e-01 0.00000000e+00]
+   [1.95090322e-01 9.80785280e-01 0.00000000e+00]
+   [6.12323400e-17 1.00000000e+00 0.00000000e+00]]
+  
+  # tangent_vectors
+  [[-0.00000000e+00  1.00000000e+00  0.00000000e+00]
+   [-1.95090322e-01  9.80785280e-01  0.00000000e+00]
+   [-3.82683432e-01  9.23879533e-01  0.00000000e+00]
+   [-5.55570233e-01  8.31469612e-01  0.00000000e+00]
+   [-7.07106781e-01  7.07106781e-01  0.00000000e+00]
+   [-8.31469612e-01  5.55570233e-01  0.00000000e+00]
+   [-9.23879533e-01  3.82683432e-01  0.00000000e+00]
+   [-9.80785280e-01  1.95090322e-01  0.00000000e+00]
+   [-1.00000000e+00  6.12323400e-17  0.00000000e+00]]
+  
+  # handles1
+  [[1.         0.06544985 0.        ]
+   [0.96801665 0.25928257 0.        ]
+   [0.89883296 0.44315121 0.        ]
+   [0.79510763 0.60998979 0.        ]
+   [0.66082675 0.75338681 0.        ]
+   [0.50115067 0.8678316  0.        ]
+   [0.32221566 0.9489261  0.        ]
+   [0.13089808 0.99355391 0.        ]]	# 注意看，8个点
+  # handles2
+  [[0.99355391 0.13089808 0.        ]
+   [0.9489261  0.32221566 0.        ]
+   [0.8678316  0.50115067 0.        ]
+   [0.75338681 0.66082675 0.        ]
+   [0.60998979 0.79510763 0.        ]
+   [0.44315121 0.89883296 0.        ]
+   [0.25928257 0.96801665 0.        ]
+   [0.06544985 1.         0.        ]]
+  ```
+
+  - 用`matplotlib`画个图直观一下吧，这是anchors
+
+  ![image-20210608165153756](./imgs/arc2.png)
+
+  - 那这些handles取的是哪些点呢？我们自定义`_scatters()`方法把它们画到一起瞧瞧：
+
+  ```python
+  def _scatters(self, points, color='red'):
+      '''
+          将传入的二维坐标画出散点图，shape:（x, 3）
+          :param points:可能是多组二维坐标，组合成list传入
+          :param color:
+          :return:
+          '''
+      if isinstance(points, numpy.ndarray):
+          # 只有一组坐标
+          x = points[:, 0]
+          y = points[:, 1]
+          plt.scatter(x, y, color=color, marker='.')
+          plt.show()
+      else:
+          # 多组坐标
+          length = len(points)    # 列表长度
+          for i in range(length):
+              x = points[i][:, 0]
+              y = points[i][:, 1]
+              plt.scatter(x, y, color=color[i], marker='.')
+              plt.show()
+  ```
+
+  - 蓝色的是handles1，绿色的是handles2
+
+  ![image-20210608172843874](./imgs/arc3.png)
+
+- 然后就传参给灵魂函数`set_anchors_and_handles()`
+
+  ```python
+  self.set_anchors_and_handles(anchors[:-1], handles1, handles2, anchors[1:])
+  ```
+
+  ```python
+  def set_anchors_and_handles(
+      self,
+      anchors1: Sequence[float],
+      handles1: Sequence[float],
+      handles2: Sequence[float],
+      anchors2: Sequence[float],
+  ) -> "VMobject":
+      assert len(anchors1) == len(handles1) == len(handles2) == len(anchors2)
+      nppcc = self.n_points_per_cubic_curve  # 4
+      total_len = nppcc * len(anchors1)   # 32
+      self.points = np.zeros((total_len, self.dim))
+      # dispatch，即四个相同大小的数组对应分配，总共32套，这就是Sequence的作用
+      arrays = [anchors1, handles1, handles2, anchors2]
+      for index, array in enumerate(arrays):
+          self.points[index::nppcc] = array
+      return self
+  ```
+
+  - `num_components`和`n_points_per_cubic_curve`参数决定了最终点的个数
+    - `num_components`代表了锚点（anchors）的个数
+    - `n_points_per_cubic_curve`代表了两个锚点之间（或者说线段之间）点的个数；但是每一段最后一个点是下一段的起点（都是红色锚点），所以重复了7次，最终只有25个不同点，这也是为啥传入`anchors[:-1]`和`anchors[1:]`，dispatch
+  - 这里最终返回`self`，即给调用这个函数的对象增加了`points`属性，也就是将这25个点作为对象的关键点存储了
+  - 那么，贝塞尔曲线的关键就在得到这些点的过程了，回到`set_pre_positioned_points()`
+
+- 将关键的`tangent_vectors`画出来看看：
+
+  ![image-20210608193236281](./imgs/arc4.png)
+
+  - 故求handles的算法就是用`d_theta/3`修正了一下tangent_vectors坐标，与anchors对应点相加，最终得到偏移的控制点
+  - 所以说：弧线没用到贝塞尔曲线？男以置信，我们还是调试看一下代码执行的顺序，按图索妓：
+    - 初始化到`Mobject.__init__()`这里有个非常关键的调用`self.generate_points()`，直接跳回执行子类的此方法，再进入内部的`set_pre_positioned_points()`
+    - 最后到`Container.__init__(self, **kwargs)`初始化一个容器，这是Scene和Mobject的基础类
+  - 。。。。。。
+
+
+
 
 
